@@ -5,6 +5,7 @@
 package qp.utils;
 
 import java.util.ArrayList;
+import java.util.stream.Stream;
 import java.io.Serializable;
 
 public class Batch implements Serializable {
@@ -79,5 +80,9 @@ public class Batch implements Serializable {
             return true;
         else
             return false;
+    }
+
+    public Stream<Tuple> stream() {
+        return this.tuples.stream();
     }
 }
