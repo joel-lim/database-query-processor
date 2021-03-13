@@ -34,6 +34,10 @@ public class Sort extends Operator {
         this.fileId = 0;
     }
 
+    public Operator getBase() {
+        return base;
+    }
+
     @Override
     public boolean open() {
         /** Set number of tuples per page**/
