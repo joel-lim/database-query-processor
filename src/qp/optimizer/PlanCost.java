@@ -76,6 +76,8 @@ public class PlanCost {
             return getStatistics((Project) node);
         } else if (node.getOpType() == OpType.SCAN) {
             return getStatistics((Scan) node);
+        } else if (node.getOpType() == OpType.SORT) {
+            return getStatistics((Sort) node);
         }
         System.out.println("operator is not supported");
         isFeasible = false;
@@ -142,6 +144,16 @@ public class PlanCost {
         switch (joinType) {
             case JoinType.NESTEDJOIN:
                 joincost = leftpages * rightpages;
+                break;
+            case JoinType.SORTMERGE:
+                // sort cost should already be factored in, so just consider merge cost
+                joincost = leftpages + rightpages;
+                // TODO: temporary low joincost to test sortmerge
+                joincost = 0;
+                break;
+            case JoinType.BLOCKNESTED:
+                // TODO: temporary high joincost to skip blocknested
+                joincost = Integer.MAX_VALUE;
                 break;
             default:
                 System.out.println("join type is not supported");
@@ -267,6 +279,21 @@ public class PlanCost {
         return numtuples;
     }
 
+    protected long getStatistics(Sort node) {
+        // Calculate how many pages of data
+        long numtuples = calculateCost(node.getBase());
+        long tuplesize = node.getSchema().getTupleSize();
+        long pagesize = Math.max(Batch.getPageSize() / tuplesize, 1);
+        long numpages = (long) Math.ceil(numtuples / pagesize);
+
+        // Calculate cost of multiway merge sort based on formula
+        long numbuff = BufferManager.getBuffersPerJoin();
+        long numruns = (long) Math.ceil(numpages / numbuff);
+        long numpasses = 1 + (long) Math.ceil(Math.log(numruns) / Math.log(numbuff - 1));
+        cost += 2 * numpages * numpasses;
+
+        return numtuples;
+    }
 }
 
 
