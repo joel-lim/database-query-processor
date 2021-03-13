@@ -153,7 +153,7 @@ public class PlanCost {
                 break;
             case JoinType.BLOCKNESTED:
                 // TODO: temporary high joincost to skip blocknested
-                joincost = Long.MAX_VALUE;
+                joincost = Integer.MAX_VALUE;
                 break;
             default:
                 System.out.println("join type is not supported");

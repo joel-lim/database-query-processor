@@ -14,15 +14,12 @@ import java.util.ArrayList;
 
 public class SortMergeJoin extends Join {
 
-    static int filenum = 0; // To get unique filenum for this operation
     int batchsize; // Number of tuples per out batch
     ArrayList<Integer> leftindex; // Indices of the join attributes in left table
     ArrayList<Integer> rightindex; // Indices of the join attributes in right table
-    String rfname; // The file name where the right table is materialized
     Batch outbatch; // Buffer page for output
     Batch leftbatch; // Buffer page for left input stream
     Batch rightbatch; // Buffer page for right input stream
-    ObjectInputStream in; // File pointer to the right hand materialized file
 
     int lcurs; // Cursor for left side buffer
     int rcurs; // Cursor for right side buffer
@@ -195,6 +192,7 @@ public class SortMergeJoin extends Join {
 
     private void addToPartition() {
         // ignores max num of buffers for now
+        // TODO: write partition to file if num buffers exceeded?
         Batch currentBatch;
 
         // handles first buffer
