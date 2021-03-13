@@ -50,6 +50,9 @@ public class Sort extends Operator {
 
     @Override
     public Batch next() {
+        if (this.inBuffers.isEmpty()) {
+            return null;
+        }
         Batch outbatch = new Batch(this.batchSize);
         while (!outbatch.isFull() && this.inBuffers.size() > 0) {
             int indexMin = 0;
