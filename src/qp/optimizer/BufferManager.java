@@ -7,18 +7,18 @@ package qp.optimizer;
 public class BufferManager {
 
     static int numBuffer;
-    static int numJoin;
+    static int numJoinAndSort;
 
-    static int buffPerJoin;
+    static int buffPerJoinAndSort;
 
-    public BufferManager(int numBuffer, int numJoin) {
+    public BufferManager(int numBuffer, int numJoinAndSort) {
         this.numBuffer = numBuffer;
-        this.numJoin = numJoin;
-        buffPerJoin = numBuffer / numJoin;
+        this.numJoinAndSort = numJoinAndSort;
+        buffPerJoinAndSort = numBuffer / numJoinAndSort;
     }
 
-    public static int getBuffersPerJoin() {
-        return buffPerJoin;
+    public static int getBuffersPerJoinAndSort() {
+        return buffPerJoinAndSort;
     }
 
 }

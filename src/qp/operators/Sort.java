@@ -6,12 +6,13 @@ import java.util.Comparator;
 
 import qp.utils.Attribute;
 import qp.utils.Batch;
-import qp.utils.Schema;
 import qp.utils.Tuple;
 import qp.utils.TupleReader;
 import qp.utils.TupleWriter;
 
 public class Sort extends Operator {
+    static int currentSortId = 0; // unique id for files between multiple sorts
+
     Operator base;
     int numBuff;
     ArrayList<Attribute> orderbyList;
@@ -20,10 +21,11 @@ public class Sort extends Operator {
     int compareMultiplier; // -1 for descending sort, else 1
     int batchSize;
     int fileId; // unique id for files generated
+    int sortId;
 
-    public Sort(Operator base, ArrayList<Attribute> orderbyList, boolean isDesc, int optype, Schema schema, int numBuff) {
+    public Sort(Operator base, ArrayList<Attribute> orderbyList, boolean isDesc, int optype, int numBuff) {
         super(optype);
-        this.setSchema(schema);
+        this.setSchema(base.getSchema());
 
         this.base = base;
         this.orderbyList = orderbyList;
@@ -32,15 +34,20 @@ public class Sort extends Operator {
         this.sortedRuns = new ArrayList<>();
         this.inBuffers = new ArrayList<>(this.numBuff - 1);
         this.fileId = 0;
+        this.sortId = Sort.currentSortId++;
     }
 
     public Operator getBase() {
         return base;
     }
 
+    public void setBase(Operator base) {
+        this.base = base;
+    }
+
     @Override
     public boolean open() {
-        /** Set number of tuples per page**/
+        this.setSchema(base.getSchema());
         int tuplesize = schema.getTupleSize();
         this.batchSize = Batch.getPageSize() / tuplesize;
         if (this.base.open()) {
@@ -58,7 +65,8 @@ public class Sort extends Operator {
             return null;
         }
         Batch outbatch = new Batch(this.batchSize);
-        while (!outbatch.isFull() && this.inBuffers.size() > 0) {
+        while (!outbatch.isFull() && !this.inBuffers.isEmpty()) {
+            
             int indexMin = 0;
             Tuple minTuple = null;
             int indexCurr = 0;
@@ -66,6 +74,7 @@ public class Sort extends Operator {
                 Tuple tup = this.inBuffers.get(indexCurr).peek();
                 if (tup == null) {
                     this.inBuffers.remove(indexCurr).close();
+                    this.sortedRuns.remove(indexCurr).delete();
                     // do not increment indexCurr
                     continue;
                 } else if (minTuple == null || getOrder().compare(tup, minTuple) < 0) {
@@ -74,9 +83,20 @@ public class Sort extends Operator {
                 } 
                 indexCurr++;
             }
+            
+            // inBuffers may have become empty within the loop
+            if (this.inBuffers.isEmpty()) {
+                break;
+            }
             outbatch.add(this.inBuffers.get(indexMin).next());
         }
         return outbatch;
+    }
+
+    @Override
+    public boolean close() {
+        System.out.println("Closed with " + sortedRuns.size() + " sorted runs still open");
+        return true;
     }
 
     private void generateSortedRuns() {
@@ -140,9 +160,11 @@ public class Sort extends Operator {
                 }
             }
             // merge any leftover sorted runs
-            File nextSortedRun = this.merge();
-            nextSortedRuns.add(nextSortedRun);
-
+            if (!this.inBuffers.isEmpty()) {
+                File nextSortedRun = this.merge();
+                nextSortedRuns.add(nextSortedRun);
+            }
+        
             for (File sortedRun : this.sortedRuns) {
                 sortedRun.delete();
             }
@@ -182,6 +204,10 @@ public class Sort extends Operator {
                     indexMin = indexCurr;
                 } 
                 indexCurr++;
+            }            
+            // inBuffers may have become empty within the loop
+            if (this.inBuffers.isEmpty()) {
+                break;
             }
             outBuffer.next(this.inBuffers.get(indexMin).next());
         }
@@ -191,6 +217,6 @@ public class Sort extends Operator {
     }
 
     private String getUniqueFileName() {
-        return "SORT" + (this.fileId++);
+        return "SORT" + (this.sortId) + "-" + (this.fileId++);
     }
 }

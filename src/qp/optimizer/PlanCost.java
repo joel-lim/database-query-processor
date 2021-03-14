@@ -138,7 +138,7 @@ public class PlanCost {
 
         /** Calculate the cost of the operation **/
         int joinType = node.getJoinType();
-        long numbuff = BufferManager.getBuffersPerJoin();
+        long numbuff = BufferManager.getBuffersPerJoinAndSort();
         long joincost;
 
         switch (joinType) {
@@ -287,7 +287,7 @@ public class PlanCost {
         long numpages = (long) Math.ceil(numtuples / pagesize);
 
         // Calculate cost of multiway merge sort based on formula
-        long numbuff = BufferManager.getBuffersPerJoin();
+        long numbuff = BufferManager.getBuffersPerJoinAndSort();
         long numruns = (long) Math.ceil(numpages / numbuff);
         long numpasses = 1 + (long) Math.ceil(Math.log(numruns) / Math.log(numbuff - 1));
         cost += 2 * numpages * numpasses;
