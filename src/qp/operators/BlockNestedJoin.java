@@ -101,16 +101,17 @@ public class BlockNestedJoin extends Join {
         }
         outbatch = new Batch(batchsize);
         while (!outbatch.isFull()) {
-            if (lcurs == 0 && eosr == true) {
+            // scanning new left pages
+            if (lbcurs == 0 && lcurs == 0 && eosr == true) {
                 /** new left pages is to be fetched **/
                 leftbatch = new ArrayList<>(numBuff - 2);
-                for (int i = 0; i < numBuff - 2; i++) {
+                for (int b = 0; b < numBuff - 2; b++) {
                     Batch inbatch;
                     if ((inbatch = left.next()) != null) {
                         leftbatch.add(inbatch);
                     } else {
                         eosl = true;
-                        return outbatch;
+                        break;
                     }
                 }
                 /**
@@ -123,11 +124,12 @@ public class BlockNestedJoin extends Join {
                     System.err.println("BlockNestedJoin:error in reading the file");
                     System.exit(1);
                 }
-            }
 
+            }
             while (eosr == false) {
                 try {
-                    if (rcurs == 0 && lcurs == 0) {
+                    //read new right page
+                    if (rcurs == 0 && lcurs == 0 && lbcurs == 0) {
                         rightbatch = (Batch) in.readObject();
                     }
                     for (int i = lbcurs; i < leftbatch.size(); i++) {
@@ -158,6 +160,12 @@ public class BlockNestedJoin extends Join {
                                             lcurs = j;
                                             rcurs = k + 1;
                                         }
+                                        return outbatch;
+                                    }
+                                }
+
+                                if (eosl) {
+                                    if (i == leftbatch.size() - 1 && j == leftbatch.get(i).size() - 1) {
                                         return outbatch;
                                     }
                                 }
