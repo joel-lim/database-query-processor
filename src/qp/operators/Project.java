@@ -1,39 +1,42 @@
-/**
- * To projec out the required attributes from the result
- **/
-
 package qp.operators;
+
+import java.io.File;
+import java.util.ArrayList;
 
 import qp.utils.Attribute;
 import qp.utils.Batch;
 import qp.utils.Schema;
 import qp.utils.Tuple;
-
-import java.util.ArrayList;
+import qp.utils.TupleReader;
+import qp.utils.TupleWriter;
 
 public class Project extends Operator {
+    Operator base;
+    int numBuff;
+    boolean distinct;
+    int batchSize;
+    ArrayList<Attribute> attributeList;
+    int[] projectedIxes;
 
-    Operator base;                 // Base table to project
-    ArrayList<Attribute> attrset;  // Set of attributes to project
-    int batchsize;                 // Number of tuples per outbatch
+    // Distinct projection
+    ArrayList<File> sortedRuns;
+    ArrayList<TupleReader> inBuffers; // for multi-way merging
+    int fileId; // unique id for files generated
 
-    /**
-     * The following fields are requied during execution
-     * * of the Project Operator
-     **/
-    Batch inbatch;
-    Batch outbatch;
+    // Regular projection
+    Batch inbatch; // for simple projection (no distinct)
+    int incur; // pointer to next pointer in inbatch
+    boolean eos;
 
-    /**
-     * index of the attributes in the base operator
-     * * that are to be projected
-     **/
-    int[] attrIndex;
+    public Project(Operator base, ArrayList<Attribute> attributes, boolean distinct, int optype, int numBuff) {
+        super(optype);
+        this.setSchema(base.getSchema());
 
-    public Project(Operator base, ArrayList<Attribute> as, int type) {
-        super(type);
         this.base = base;
-        this.attrset = as;
+        this.attributeList = attributes;
+        this.distinct = distinct;
+        this.numBuff = numBuff;
+        this.fileId = 0;
     }
 
     public Operator getBase() {
@@ -43,88 +46,250 @@ public class Project extends Operator {
     public void setBase(Operator base) {
         this.base = base;
     }
-
+    
     public ArrayList<Attribute> getProjAttr() {
-        return attrset;
+        return this.attributeList;
     }
 
+    public boolean isDistinct() {
+        return this.distinct;
+    }
 
-    /**
-     * Opens the connection to the base operator
-     * * Also figures out what are the columns to be
-     * * projected from the base operator
-     **/
+    @Override
     public boolean open() {
-        /** set number of tuples per batch **/
-        int tuplesize = schema.getTupleSize();
-        batchsize = Batch.getPageSize() / tuplesize;
+        int tuplesize = schema.getTupleSize(); // this is the projected schema (subschema)
+        this.batchSize = Batch.getPageSize() / tuplesize;
+        // precompute indices for projection
+        this.projectedIxes = new int[this.attributeList.size()];
+        for (int i = 0; i < this.projectedIxes.length; i++) {
+            this.projectedIxes[i] = this.base.getSchema().indexOf(this.attributeList.get(i));
+        }
+        if (this.base.open()) {
+            if (this.distinct) {
+                this.sortedRuns = new ArrayList<>();
+                this.inBuffers = new ArrayList<>(this.numBuff - 1);
+                this.generateProjectedSortedRuns();
+                this.mergeAndDedupRuns();
+            }            
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-        if (!base.open()) return false;
-
-        /** The following loop finds the index of the columns that
-         ** are required from the base operator
-         **/
-        Schema baseSchema = base.getSchema();
-        attrIndex = new int[attrset.size()];
-        for (int i = 0; i < attrset.size(); ++i) {
-            Attribute attr = attrset.get(i);
-
-            if (attr.getAggType() != Attribute.NONE) {
-                System.err.println("Aggragation is not implemented.");
-                System.exit(1);
+    @Override
+    public Batch next() {
+        if (this.distinct) {
+            return this.nextDistinct();
+        } else {
+            if (this.eos) {
+                return null;
+            }
+            Batch outbatch = new Batch(this.batchSize);
+            while (!outbatch.isFull()) {
+                if (this.inbatch == null) {
+                    this.inbatch = base.next();
+                    if (this.inbatch == null) {
+                        this.eos = true;
+                        base.close();
+                        return outbatch.isEmpty() ? null : outbatch;
+                    }
+                }
+                // inbatch is not null
+                if (this.incur < this.inbatch.size()) {
+                    outbatch.add(this.project(this.inbatch.get(this.incur)));
+                    this.incur++;
+                } else {
+                    this.incur = 0;
+                    this.inbatch = null;
+                }
             }
 
-            int index = baseSchema.indexOf(attr.getBaseAttribute());
-            attrIndex[i] = index;
+            return outbatch;
         }
-        return true;
     }
 
-    /**
-     * Read next tuple from operator
-     */
-    public Batch next() {
-        outbatch = new Batch(batchsize);
-        /** all the tuples in the inbuffer goes to the output buffer **/
-        inbatch = base.next();
-
-        if (inbatch == null) {
+    private Batch nextDistinct() {
+        if (this.inBuffers.isEmpty()) {
             return null;
         }
-
-        for (int i = 0; i < inbatch.size(); i++) {
-            Tuple basetuple = inbatch.get(i);
-            //Debug.PPrint(basetuple);
-            //System.out.println();
-            ArrayList<Object> present = new ArrayList<>();
-            for (int j = 0; j < attrset.size(); j++) {
-                Object data = basetuple.dataAt(attrIndex[j]);
-                present.add(data);
+        Batch outbatch = new Batch(this.batchSize);
+        Tuple prev = null;
+        while (!outbatch.isFull() && !this.inBuffers.isEmpty()) {
+            
+            int indexMin = 0;
+            Tuple minTuple = null;
+            int indexCurr = 0;
+            while (indexCurr < this.inBuffers.size()) {
+                Tuple tup = this.inBuffers.get(indexCurr).peek();
+                // consume duplicates
+                while (prev != null && tup != null && prev.equals(tup)) {
+                    this.inBuffers.get(indexCurr).next();
+                    tup = this.inBuffers.get(indexCurr).peek();
+                }
+                if (tup == null) {
+                    this.inBuffers.remove(indexCurr).close();
+                    this.sortedRuns.remove(indexCurr).delete();
+                    // do not increment indexCurr
+                    continue;
+                } else if (minTuple == null || tup.compareTo(minTuple) < 0) {
+                    minTuple = tup;
+                    indexMin = indexCurr;
+                } 
+                indexCurr++;
             }
-            Tuple outtuple = new Tuple(present);
-            outbatch.add(outtuple);
+            
+            // inBuffers may have become empty within the loop
+            if (this.inBuffers.isEmpty()) {
+                break;
+            }
+            prev = this.inBuffers.get(indexMin).next();
+            outbatch.add(prev);
         }
         return outbatch;
     }
 
-    /**
-     * Close the operator
-     */
+    @Override
     public boolean close() {
-        inbatch = null;
-        base.close();
         return true;
+    }
+
+    private void generateProjectedSortedRuns() {
+        Batch inbatch;
+        ArrayList<Batch> buffers = new ArrayList<>(this.numBuff);
+        while ((inbatch = this.base.next()) != null) {
+            buffers.add(inbatch);
+            if (buffers.size() == this.numBuff) {
+                sortAndWrite(buffers);
+                buffers.clear();
+            }
+        }
+        if (buffers.size() > 0) {
+            sortAndWrite(buffers);
+        }
+        this.base.close();
+    }
+
+    private void sortAndWrite(ArrayList<Batch> buffers) {
+        File sortedRun = new File(this.getUniqueFileName());
+        this.sortedRuns.add(sortedRun);
+        TupleWriter out = new TupleWriter(sortedRun.getName(), this.batchSize);
+        if (!out.open()) {
+            System.err.println("Sort: Error in writing file");
+            System.exit(1);
+        }
+        buffers.stream()
+            .flatMap(buff -> buff.stream())
+            .map(this::project)
+            .sorted()
+            .distinct()
+            .forEachOrdered(tup -> out.next(tup)); // I hope this does not count as using extra buffers and "cheating"
+        out.close();
+    }
+
+    private Tuple project(Tuple inputTuple) {
+        ArrayList<Object> projected = new ArrayList<>(this.projectedIxes.length);
+        for (int i : this.projectedIxes) {
+            projected.add(inputTuple.dataAt(i));
+        }
+        return new Tuple(projected);
+    }
+
+
+    private void mergeAndDedupRuns() {
+        // iterate until final pass
+        while (sortedRuns.size() > this.numBuff - 1) {
+            // single pass
+            ArrayList<File> nextSortedRuns = new ArrayList<>();
+            for (File sortedRun : this.sortedRuns) {
+                TupleReader in = new TupleReader(sortedRun.getName(), this.batchSize);
+                if (!in.open()) {
+                    System.err.println("Sort: Error in opening sorted run for reading");
+                    System.exit(1);
+                }
+                this.inBuffers.add(in);
+                if (this.inBuffers.size() == this.numBuff - 1) {
+                    File nextSortedRun = this.mergeAndDedup();
+                    nextSortedRuns.add(nextSortedRun);
+                }
+            }
+            // merge any leftover sorted runs
+            if (!this.inBuffers.isEmpty()) {
+                File nextSortedRun = this.mergeAndDedup();
+                nextSortedRuns.add(nextSortedRun);
+            }
+        
+            for (File sortedRun : this.sortedRuns) {
+                sortedRun.delete();
+            }
+            this.sortedRuns = nextSortedRuns;
+        }
+
+        // Populate buffers ready to produce sorted output upon call to next()
+        for (File sortedRun : this.sortedRuns) {
+            TupleReader in = new TupleReader(sortedRun.getName(), this.batchSize);
+            if (!in.open()) {
+                System.err.println("Sort: Error in opening sorted run for reading");
+                System.exit(1);
+            }
+            this.inBuffers.add(in);
+        }
+    }
+
+    private File mergeAndDedup() {
+        File nextSortedRun = new File(this.getUniqueFileName());
+        TupleWriter outBuffer = new TupleWriter(nextSortedRun.getName(), this.batchSize);
+        if (!outBuffer.open()) {
+            System.err.println("Project: Error in opening file for writing");
+            System.exit(1);
+        }
+        Tuple prev = null;
+        while (this.inBuffers.size() > 0) {
+            int indexMin = 0;
+            Tuple minTuple = null;
+            int indexCurr = 0;
+            while (indexCurr < this.inBuffers.size()) {
+                Tuple tup = this.inBuffers.get(indexCurr).peek();
+                // consume duplicates
+                while (prev != null && tup != null && prev.equals(tup)) {
+                    this.inBuffers.get(indexCurr).next();
+                    tup = this.inBuffers.get(indexCurr).peek();
+                }
+                if (tup == null) {
+                    this.inBuffers.remove(indexCurr).close();
+                    // do not increment indexCurr
+                    continue;
+                } else if (minTuple == null || tup.compareTo(minTuple) < 0) {
+                    minTuple = tup;
+                    indexMin = indexCurr;
+                } 
+                indexCurr++;
+            }            
+            // inBuffers may have become empty within the loop
+            if (this.inBuffers.isEmpty()) {
+                break;
+            }
+            
+            prev = this.inBuffers.get(indexMin).next();
+            outBuffer.next(prev);
+        }
+        outBuffer.close();
+        this.inBuffers.clear();
+        return nextSortedRun;
+    }
+
+    private String getUniqueFileName() {
+        return "DISTINCT-" + (this.fileId++);
     }
 
     public Object clone() {
         Operator newbase = (Operator) base.clone();
         ArrayList<Attribute> newattr = new ArrayList<>();
-        for (int i = 0; i < attrset.size(); ++i)
-            newattr.add((Attribute) attrset.get(i).clone());
-        Project newproj = new Project(newbase, newattr, optype);
+        for (int i = 0; i < attributeList.size(); ++i)
+            newattr.add((Attribute) attributeList.get(i).clone());
+        Project newproj = new Project(newbase, newattr, this.distinct, optype, this.numBuff);
         Schema newSchema = newbase.getSchema().subSchema(newattr);
         newproj.setSchema(newSchema);
         return newproj;
     }
-
 }

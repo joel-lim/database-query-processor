@@ -73,7 +73,7 @@ public class PlanCost {
         } else if (node.getOpType() == OpType.SELECT) {
             return getStatistics((Select) node);
         } else if (node.getOpType() == OpType.PROJECT) {
-            return getStatistics((Project2) node);
+            return getStatistics((Project) node);
         } else if (node.getOpType() == OpType.SCAN) {
             return getStatistics((Scan) node);
         } else if (node.getOpType() == OpType.SORT) {
@@ -88,7 +88,7 @@ public class PlanCost {
      * Projection will not change any statistics
      * * No cost involved as done on the fly
      **/
-    protected long getStatistics(Project2 node) {
+    protected long getStatistics(Project node) {
         if (node.isDistinct()) {
             long intuples = calculateCost(node.getBase());
             long numdistinct = 1;
@@ -170,15 +170,15 @@ public class PlanCost {
             case JoinType.NESTEDJOIN:
                 joincost = leftpages * rightpages;
                 break;
+            case JoinType.BLOCKNESTED:
+                int blockSize = node.getNumBuff() - 2;
+                long numBlocks = (long) Math.ceil((double) leftpages / (double) blockSize);
+                joincost = leftpages + (numBlocks * (rightpages));
             case JoinType.SORTMERGE:
                 // sort cost should already be factored in, so just consider merge cost
                 joincost = leftpages + rightpages;
                 // TODO: temporary low joincost to test sortmerge
                 joincost = 0;
-                break;
-            case JoinType.BLOCKNESTED:
-                // TODO: temporary high joincost to skip blocknested
-                joincost = Integer.MAX_VALUE;
                 break;
             default:
                 System.out.println("join type is not supported");

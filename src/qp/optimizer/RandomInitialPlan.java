@@ -191,7 +191,7 @@ public class RandomInitialPlan {
             System.out.println();
             // root = new Project(base, projectlist, OpType.PROJECT);
             int numBuff = BufferManager.getBuffersPerJoinAndSort();
-            root = new Project2(base, projectlist, sqlquery.isDistinct(), OpType.PROJECT, numBuff);
+            root = new Project(base, projectlist, sqlquery.isDistinct(), OpType.PROJECT, numBuff);
             Schema newSchema = base.getSchema().subSchema(projectlist);
             root.setSchema(newSchema);
         }

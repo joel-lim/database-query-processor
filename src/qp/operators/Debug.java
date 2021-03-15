@@ -112,7 +112,7 @@ public class Debug {
 
         } else if (optype == OpType.PROJECT) {
             System.out.print("Project(");
-            PPrint(((Project2) node).getBase());
+            PPrint(((Project) node).getBase());
             System.out.print(")");
 
         } else if (optype == OpType.SCAN) {

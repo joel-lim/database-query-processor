@@ -55,6 +55,12 @@ public class RandomOptimizer {
                     nj.setRight(right);
                     nj.setNumBuff(numbuff);
                     return nj;
+                case JoinType.BLOCKNESTED:
+                    BlockNestedJoin bnj = new BlockNestedJoin((Join) node);
+                    bnj.setLeft(left);
+                    bnj.setRight(right);
+                    bnj.setNumBuff(numbuff);
+                    return bnj;
                 case JoinType.SORTMERGE:
                     SortMergeJoin smj = new SortMergeJoin((Join) node);
 
@@ -79,8 +85,8 @@ public class RandomOptimizer {
             ((Select) node).setBase(base);
             return node;
         } else if (node.getOpType() == OpType.PROJECT) {
-            Operator base = makeExecPlan(((Project2) node).getBase());
-            ((Project2) node).setBase(base);
+            Operator base = makeExecPlan(((Project) node).getBase());
+            ((Project) node).setBase(base);
             return node;
         } else if (node.getOpType() == OpType.SORT) {
             Operator base = makeExecPlan(((Sort) node).getBase());
@@ -381,7 +387,7 @@ public class RandomOptimizer {
             // if sort/project/select operator
             return findNodeAt(((Select) node).getBase(), joinNum);
         } else if (node.getOpType() == OpType.PROJECT) {
-            return findNodeAt(((Project2) node).getBase(), joinNum);
+            return findNodeAt(((Project) node).getBase(), joinNum);
         } else {
             return null;
         }
@@ -402,9 +408,9 @@ public class RandomOptimizer {
             modifySchema(base);
             node.setSchema(base.getSchema());
         } else if (node.getOpType() == OpType.PROJECT) {
-            Operator base = ((Project2) node).getBase();
+            Operator base = ((Project) node).getBase();
             modifySchema(base);
-            ArrayList attrlist = ((Project2) node).getProjAttr();
+            ArrayList attrlist = ((Project) node).getProjAttr();
             node.setSchema(base.getSchema().subSchema(attrlist));
         }
     }
