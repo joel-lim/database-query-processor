@@ -21,7 +21,7 @@ public class BlockNestedJoin extends Join {
     ObjectInputStream in; // File pointer to the right hand materialized file
 
     int lcurs; // Cursor for left side current buffer
-    int lbcurs; // Cursor for lesft side buffer
+    int lbcurs; // Cursor for left side buffer
     int rcurs; // Cursor for right side buffer
     boolean eosl; // Whether end of stream (left table) is reached
     boolean eosr; // Whether end of stream (right table) is reached
@@ -31,6 +31,7 @@ public class BlockNestedJoin extends Join {
         schema = jn.getSchema();
         jointype = jn.getJoinType();
         numBuff = jn.getNumBuff();
+        System.out.println("BNL being created");
     }
 
     /**
@@ -132,14 +133,15 @@ public class BlockNestedJoin extends Join {
                 }
 
             }
-            System.out.println("START: lbcurs:\t" + lbcurs);
-            System.out.println("START: lcurs:\t" + lcurs);
-            System.out.println("START: rcurs:\t" + rcurs);
+            System.out.println("START: filenum:\t" + filenum + " lbcurs:" + lbcurs);
+            System.out.println("START: lcurs: \t" + lcurs);
+            System.out.println("START: rcurs: \t" + rcurs);
 
             while (eosr == false) {
                 try {
                     //read new right page
                     if (rcurs == 0 && lcurs == 0 && lbcurs == 0) {
+                        System.out.println("reading new right batch");
                         rightbatch = (Batch) in.readObject();
                     }
                     System.out.println("leftbatch.size() " + leftbatch.size());
