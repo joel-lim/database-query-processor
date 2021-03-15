@@ -47,7 +47,7 @@ public class RandomOptimizer {
             Operator left = makeExecPlan(((Join) node).getLeft());
             Operator right = makeExecPlan(((Join) node).getRight());
             int joinType = ((Join) node).getJoinType();
-            int numbuff = BufferManager.getBuffersPerJoin();
+            int numbuff = BufferManager.getBuffersPerJoinAndSort();
             switch (joinType) {
                 case JoinType.NESTEDJOIN:
                     NestedJoin nj = new NestedJoin((Join) node);
@@ -61,6 +61,22 @@ public class RandomOptimizer {
                     bnj.setRight(right);
                     bnj.setNumBuff(numbuff);
                     return bnj;
+                case JoinType.SORTMERGE:
+                    SortMergeJoin smj = new SortMergeJoin((Join) node);
+
+                    // get attributes for the respective sorts
+                    ArrayList<Attribute> leftattrs = new ArrayList<>();
+                    ArrayList<Attribute> rightattrs = new ArrayList<>();
+                    for (Condition con : smj.getConditionList()) {
+                        leftattrs.add(con.getLhs());
+                        rightattrs.add((Attribute) con.getRhs());
+                    }
+
+                    // have to sort left and right before merge is performed
+                    smj.setLeft(new Sort(left, leftattrs, false, OpType.SORT, numbuff));
+                    smj.setRight(new Sort(right, rightattrs, false, OpType.SORT, numbuff));
+                    smj.setNumBuff(numbuff);
+                    return smj;
                 default:
                     return node;
             }
@@ -71,6 +87,10 @@ public class RandomOptimizer {
         } else if (node.getOpType() == OpType.PROJECT) {
             Operator base = makeExecPlan(((Project) node).getBase());
             ((Project) node).setBase(base);
+            return node;
+        } else if (node.getOpType() == OpType.SORT) {
+            Operator base = makeExecPlan(((Sort) node).getBase());
+            ((Sort) node).setBase(base);
             return node;
         } else {
             return node;

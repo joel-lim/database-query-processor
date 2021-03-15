@@ -58,10 +58,10 @@ public class RandomInitialPlan {
             System.exit(1);
         }
 
-        if (sqlquery.getOrderByList().size() > 0) {
-            System.err.println("Orderby is not implemented.");
-            System.exit(1);
-        }
+        // if (sqlquery.getOrderByList().size() > 0) {
+        //     System.err.println("Orderby is not implemented.");
+        //     System.exit(1);
+        // }
 
         tab_op_hash = new HashMap<>();
         createScanOp();
@@ -69,6 +69,7 @@ public class RandomInitialPlan {
         if (numJoin != 0) {
             createJoinOp();
         }
+        createSortOp();
         createProjectOp();
 
         return root;
@@ -184,12 +185,32 @@ public class RandomInitialPlan {
 
     public void createProjectOp() {
         Operator base = root;
+        System.out.println("Base schema: ");
+        for (Attribute i : base.getSchema().getAttList()) {
+            System.out.print(i + " ");
+        }
+        System.out.println();
         if (projectlist == null)
             projectlist = new ArrayList<Attribute>();
         if (!projectlist.isEmpty()) {
+            System.out.println("Project list: ");
+            for (Attribute i : projectlist) {
+                System.out.print(i + " ");
+            }
+            System.out.println();
             root = new Project(base, projectlist, OpType.PROJECT);
             Schema newSchema = base.getSchema().subSchema(projectlist);
             root.setSchema(newSchema);
+        }
+    }
+
+    public void createSortOp() {
+        Operator base = this.root;
+        if (!this.sqlquery.getOrderByList().isEmpty()) {
+            ArrayList<Attribute> orderlist = this.sqlquery.getOrderByList();
+            boolean isDesc = this.sqlquery.isDesc();
+            int numBuff = BufferManager.getBuffersPerJoinAndSort();
+            this.root = new Sort(base, orderlist, isDesc, OpType.SORT, numBuff);
         }
     }
 
