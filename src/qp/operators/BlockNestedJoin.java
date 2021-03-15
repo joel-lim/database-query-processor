@@ -55,7 +55,6 @@ public class BlockNestedJoin extends Join {
         Batch rightpage;
 
         /** initialize the cursors of input buffers **/
-        System.out.println("Open being called??!!!");
         lbcurs = 0;
         lcurs = 0;
         rcurs = 0;
@@ -101,10 +100,6 @@ public class BlockNestedJoin extends Join {
         if (eosl) {
             return null;
         }
-        System.out.println("next being called");
-        System.out.println("START1: lbcurs:\t" + lbcurs);
-        System.out.println("START1: lcurs:\t" + lcurs);
-        System.out.println("START1: rcurs:\t" + rcurs);
 
         outbatch = new Batch(batchsize);
         while (!outbatch.isFull()) {
@@ -117,10 +112,15 @@ public class BlockNestedJoin extends Join {
                     if ((inbatch = left.next()) != null) {
                         leftbatch.add(inbatch);
                     } else {
-                        eosl = true;
                         break;
                     }
                 }
+
+                if (leftbatch.isEmpty()) {
+                    eosl = true;
+                    return outbatch;
+                }
+
                 /**
                  * Whenever a new left page comes, we have to start the scanning of right table
                  **/
@@ -133,34 +133,23 @@ public class BlockNestedJoin extends Join {
                 }
 
             }
-            System.out.println("START: filenum:\t" + filenum + " lbcurs:" + lbcurs);
-            System.out.println("START: lcurs: \t" + lcurs);
-            System.out.println("START: rcurs: \t" + rcurs);
 
             while (eosr == false) {
                 try {
                     //read new right page
                     if (rcurs == 0 && lcurs == 0 && lbcurs == 0) {
-                        System.out.println("reading new right batch");
                         rightbatch = (Batch) in.readObject();
                     }
-                    System.out.println("leftbatch.size() " + leftbatch.size());
-                    System.out.println("rightbatch.size() " + rightbatch.size());
 
                     for (int i = lbcurs; i < leftbatch.size(); i++) {
-                        System.out.print("i: " + i + "\n");
                         for (int j = lcurs; j < leftbatch.get(i).size(); j++) {
-                            System.out.print("j: " + j + "\n");
                             for (int k = rcurs; k < rightbatch.size(); k++) {
-                                System.out.print("k: " + k + "\n");
                                 Tuple lefttuple = leftbatch.get(i).get(j);
                                 Tuple righttuple = rightbatch.get(k);
                                 if (lefttuple.checkJoin(righttuple, leftindex, rightindex)) {
                                     Tuple outtuple = lefttuple.joinWith(righttuple);
                                     outbatch.add(outtuple);
-                                    System.out.println("Add matching tuple!");
                                     if (outbatch.isFull()) {
-                                        System.out.println("IsFULL!!!");
                                         if (i == leftbatch.size() - 1 && j == leftbatch.get(i).size() - 1
                                                 && k == rightbatch.size() - 1) {
                                             lcurs= 0;
@@ -181,10 +170,6 @@ public class BlockNestedJoin extends Join {
                                             rcurs = k + 1;
                                         }
 
-                                        System.out.println("lbcurs:\t" + lbcurs);
-                                        System.out.println("lcurs:\t" + lcurs);
-                                        System.out.println("rcurs:\t" + rcurs);
-
                                         return outbatch;
                                     }
                                 }
@@ -193,7 +178,6 @@ public class BlockNestedJoin extends Join {
                         }
                         lcurs = 0;
                     }
-                    System.out.println("lburs being assigned to 0");
                     lbcurs = 0;
                 } catch (EOFException e) {
                     try {
@@ -201,7 +185,6 @@ public class BlockNestedJoin extends Join {
                     } catch (IOException io) {
                         System.out.println("BlockNestedJoin: Error in reading temporary file");
                     }
-                    System.out.println("EOSR SET TO TRUE");
                     eosr = true;
                 } catch (ClassNotFoundException c) {
                     System.out.println("BlockNestedJoin: Error in deserialising temporary file ");
