@@ -167,6 +167,7 @@ public class Project2 extends Operator {
         if (buffers.size() > 0) {
             sortAndWrite(buffers);
         }
+        this.base.close();
     }
 
     private void sortAndWrite(ArrayList<Batch> buffers) {
