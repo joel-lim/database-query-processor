@@ -10,7 +10,7 @@ import java.io.*;
 /**
  * Tuple - a simple object which holds an ArrayList of data
  */
-public class Tuple implements Serializable {
+public class Tuple implements Serializable, Comparable<Tuple> {
 
     public ArrayList<Object> _data;
 
@@ -120,5 +120,37 @@ public class Tuple implements Serializable {
             }
         }
         return 0;
+    }
+
+    @Override
+    public int compareTo(Tuple t2) {
+        for (int i = 0; i < this.data().size(); i++) {
+            Object t1data = this.dataAt(i);
+            Object t2data = t2.dataAt(i);
+            int compRes;
+            if (t1data instanceof Integer) {
+                compRes = ((Integer) t1data).compareTo((Integer) t2data);
+            } else if (t1data instanceof String) {
+                compRes = ((String) t1data).compareTo((String) t2data);
+            } else if (t1data instanceof Float) {
+                compRes = ((Float) t1data).compareTo((Float) t2data);
+            } else {
+                System.out.println("Tuple: Unknown comparision of the tuples");
+                System.exit(1);
+                return 0;
+            }
+            if (compRes != 0) {
+                return compRes;
+            }
+        }
+        return 0;
+    };
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof Tuple)) {
+            return false;
+        }
+        return this.data().equals(((Tuple)other).data());
     }
 }

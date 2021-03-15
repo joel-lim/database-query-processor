@@ -28,7 +28,9 @@ public class QueryMain {
         Batch.setPageSize(getPageSize(args, in));
 
         SQLQuery sqlquery = getSQLQuery(args[0]);
-        configureBufferManager(sqlquery.getNumJoin(), !sqlquery.getOrderByList().isEmpty(), args, in);
+        // 1 sort required for ORDERBY and DISTINCT clauses each
+        int numSort = (sqlquery.getOrderByList().isEmpty() ? 0 : 1) + (sqlquery.isDistinct() ? 1 : 0);
+        configureBufferManager(sqlquery.getNumJoin(), numSort, args, in);
 
         Operator root = getQueryPlan(sqlquery);
         printFinalPlan(root, args, in);
@@ -86,8 +88,9 @@ public class QueryMain {
      * If there are joins then assigns buffers to each join operator while preparing the plan.
      * As buffer manager is not implemented, just input the number of buffers available.
      **/
-    private static void configureBufferManager(int numJoin, boolean hasSort, String[] args, BufferedReader in) {
-        if (numJoin != 0 || hasSort) {
+    private static void configureBufferManager(int numJoin, int numSort, String[] args, BufferedReader in) {
+        int splitBuff = numJoin + numSort;
+        if (splitBuff != 0) {
             int numBuff = 1000;
             if (args.length < 4) {
                 System.out.println("enter the number of buffers available");
@@ -98,14 +101,13 @@ public class QueryMain {
                     e.printStackTrace();
                 }
             } else numBuff = Integer.parseInt(args[3]);
-            int splitBuff = numJoin + (hasSort ? 1 : 0);
             BufferManager bm = new BufferManager(numBuff, splitBuff);
         }
 
         /** Check the number of buffers available is enough or not **/
         int numBuff = BufferManager.getBuffersPerJoinAndSort();
-        if (numJoin > 0 && numBuff < 3) {
-            System.out.println("Minimum 3 buffers are required per join operator ");
+        if (splitBuff > 0 && numBuff < 3) {
+            System.out.println("Minimum 3 buffers are required per join/sort operation ");
             System.exit(1);
         }
     }

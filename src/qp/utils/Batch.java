@@ -26,6 +26,10 @@ public class Batch implements Serializable {
 
     /** Number of tuples per page **/
     public Batch(int numtuple) {
+        if (numtuple < 1) {
+            System.err.println("Error: Page size too small, cannot fit single tuple");
+            System.exit(1);
+        }
         MAX_SIZE = numtuple;
         tuples = new ArrayList<>(MAX_SIZE);
     }

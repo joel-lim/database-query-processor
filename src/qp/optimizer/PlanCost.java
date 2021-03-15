@@ -73,7 +73,7 @@ public class PlanCost {
         } else if (node.getOpType() == OpType.SELECT) {
             return getStatistics((Select) node);
         } else if (node.getOpType() == OpType.PROJECT) {
-            return getStatistics((Project) node);
+            return getStatistics((Project2) node);
         } else if (node.getOpType() == OpType.SCAN) {
             return getStatistics((Scan) node);
         } else if (node.getOpType() == OpType.SORT) {
@@ -88,7 +88,32 @@ public class PlanCost {
      * Projection will not change any statistics
      * * No cost involved as done on the fly
      **/
-    protected long getStatistics(Project node) {
+    protected long getStatistics(Project2 node) {
+        if (node.isDistinct()) {
+            long intuples = calculateCost(node.getBase());
+            long numdistinct = 1;
+            for (Attribute attr : node.getProjAttr()) {
+                numdistinct *= ht.get(attr);
+            }
+            // in tuple size differs from out tuple
+            long intuplesize = node.getBase().getSchema().getTupleSize();
+            long outtuplesize = node.getSchema().getTupleSize();
+            long inpagesize = Math.max(Batch.getPageSize() / intuplesize, 1);
+            long innumpages = (long) Math.ceil(intuples / inpagesize);
+            long outpagesize = Math.max(Batch.getPageSize() / outtuplesize, 1);
+            long outnumpages = (long) Math.ceil(intuples / outpagesize);
+            
+            // Cost calculation - initial pass (generate sorted runs)
+            this.cost += 2 * innumpages;
+
+            long numBuff = BufferManager.getBuffersPerJoinAndSort();
+            long numruns = (long) Math.ceil(innumpages / numBuff);
+            long numMergePasses = (long) Math.ceil(Math.log(numruns) / Math.log(numBuff - 1));
+            
+            this.cost += 2 * outnumpages * numMergePasses;
+
+            return Math.max(numdistinct, intuples);
+        }
         return calculateCost(node.getBase());
     }
 
