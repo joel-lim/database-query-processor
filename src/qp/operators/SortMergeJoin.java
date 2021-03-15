@@ -98,10 +98,15 @@ public class SortMergeJoin extends Join {
                     backtrackPartition();
                 }
             } else if (compare > 0) {
-                // right is smaller than left (we are at the end of the partition at this point)
-                advanceRight();
-                // clear partition as it will no longer match with any left tuples
-                clearPartition();
+                // right is smaller than left
+                if (!partition.isEmpty()) {
+                    // clear partition as it will no longer match with any left tuples
+                    clearPartition();
+                    // return rightTuple to the position after the partition
+                    rightTuple = rightbatch.get(rcurs - 1);
+                } else {
+                    advanceRight();
+                }
             } else {
                 // tuples satisfy the join condition
                 Tuple outTuple = leftTuple.joinWith(rightTuple);
@@ -121,9 +126,6 @@ public class SortMergeJoin extends Join {
                         advancePartition();
                     }
                 }
-            }
-            if (outbatch.isFull()) {
-                return outbatch;
             }
         }
         return outbatch;
@@ -230,6 +232,8 @@ public class SortMergeJoin extends Join {
         isNewPartition = false;
         partitionBatchNo = 0;
         partitionTupleNo = 0;
+        rightTuple = partition.get(partitionBatchNo)
+                              .get(partitionTupleNo);
     }
 
     private void clearPartition() {
