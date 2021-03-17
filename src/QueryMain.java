@@ -28,8 +28,10 @@ public class QueryMain {
         Batch.setPageSize(getPageSize(args, in));
 
         SQLQuery sqlquery = getSQLQuery(args[0]);
-        // 1 sort required for ORDERBY and DISTINCT clauses each
-        int numSort = (sqlquery.getOrderByList().isEmpty() ? 0 : 1) + (sqlquery.isDistinct() ? 1 : 0);
+        // 1 sort required for each of ORDERBY, GROUPBY and DISTINCT clauses
+        int numSort = (sqlquery.getOrderByList().isEmpty() ? 0 : 1) 
+                    + (sqlquery.isDistinct() ? 1 : 0)
+                    + (sqlquery.getGroupByList().isEmpty() ? 0 : 1);
         configureBufferManager(sqlquery.getNumJoin(), numSort, args, in);
 
         Operator root = getQueryPlan(sqlquery);

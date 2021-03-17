@@ -47,6 +47,13 @@ The cost and output size of distinct can be found in [PlanCost.java](src/qp/opti
 
 ## 5: Implementation of GROUPBY
 
+Our group only implemented GROUPBY and not aggregate functions. Thus the only operation that can be done on the grouped table is to select the grouped attributes, which will be distinct. Performing `SELECT (A) ... GROUPBY (B)` is thus equivalent to first projecting distinct B, then projecting A. Since GROUPBY can be expressed in terms of our existing Project operator, we do not need a Groupby Operator. Our implementation is found in [RandomInitialPlan.createProjectOp](src/qp/optimizer/RandomInitialPlan.java), where if the groupby list is nonempty, we create a Project Operator to select distinct tuples by the grouping attributes, then pass the output to another Project Operator with the actual query `projectlist` and `isDistinct`.
+
+Furthermore, plan costs involving GROUPBY are already properly calculated as it simply comprises Project Operators.
+
+We must note that this implementation of GROUPBY only works because aggregate operators are not supported. To add support for aggregate operators, some modifications will be necessary to compute the aggregate values instead of simply discarding duplicates.
+
+
 ## 6: Bugfixes
 
 In the original implementation, if the page size was too small for a single tuple in any result table or intermediate table, the program would enter an infinite loop as Batch has 0 capacity. We fixed this by simply checking the given batch size in the Batch constructor [here](src/qp/utils/Batch.java), and exiting the program if batch size is 0. We deem this an appropriate course of action as there is no way for the program to work around the page size being too small for a single tuple, except if the user were to run the program with a larger input page size.

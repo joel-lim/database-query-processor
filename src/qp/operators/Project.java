@@ -63,7 +63,13 @@ public class Project extends Operator {
         // precompute indices for projection
         this.projectedIxes = new int[this.attributeList.size()];
         for (int i = 0; i < this.projectedIxes.length; i++) {
-            this.projectedIxes[i] = this.base.getSchema().indexOf(this.attributeList.get(i));
+            Attribute attr = this.attributeList.get(i);
+            if (attr.getAggType() != Attribute.NONE) {
+                System.err.println("Aggregation is not implemented.");
+                System.exit(1);
+            }
+            // At this point attr is a base attribute, no need to call Attribute.getBaseAttribute();
+            this.projectedIxes[i] = this.base.getSchema().indexOf(attr);
         }
         if (this.base.open()) {
             if (this.distinct) {

@@ -48,11 +48,6 @@ public class RandomInitialPlan {
      **/
     public Operator prepareInitialPlan() {
 
-        if (sqlquery.getGroupByList().size() > 0) {
-            System.err.println("GroupBy is not implemented.");
-            System.exit(1);
-        }
-
         tab_op_hash = new HashMap<>();
         createScanOp();
         createSelectOp();
@@ -191,9 +186,19 @@ public class RandomInitialPlan {
             System.out.println();
             // root = new Project(base, projectlist, OpType.PROJECT);
             int numBuff = BufferManager.getBuffersPerJoinAndSort();
-            root = new Project(base, projectlist, sqlquery.isDistinct(), OpType.PROJECT, numBuff);
-            Schema newSchema = base.getSchema().subSchema(projectlist);
-            root.setSchema(newSchema);
+            if (!groupbylist.isEmpty()) {
+                // Implement GROUPBY as first getting distinct values of the groupby list
+                // then projecting the attributes in the projectlist. projectlist must be a subset of groupbylist
+                Operator subroot = new Project(base, groupbylist, true, OpType.PROJECT, numBuff);
+                Schema newSchema = base.getSchema().subSchema(groupbylist);
+                subroot.setSchema(newSchema);
+                root = new Project(subroot, projectlist, sqlquery.isDistinct(), OpType.PROJECT, numBuff);
+                root.setSchema(newSchema.subSchema(projectlist));
+            } else {
+                root = new Project(base, projectlist, sqlquery.isDistinct(), OpType.PROJECT, numBuff);
+                Schema newSchema = base.getSchema().subSchema(projectlist);
+                root.setSchema(newSchema);
+            }
         }
     }
 
