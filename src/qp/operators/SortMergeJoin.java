@@ -9,7 +9,6 @@ import qp.utils.Batch;
 import qp.utils.Condition;
 import qp.utils.Tuple;
 
-import java.io.*;
 import java.util.ArrayList;
 
 public class SortMergeJoin extends Join {
@@ -32,7 +31,6 @@ public class SortMergeJoin extends Join {
     boolean isNewPartition = true;
     int partitionBatchNo = 0; // Pointer to current partition batch
     int partitionTupleNo = 0; // Pointer to current tuple in current partition batch
-    ObjectInputStream partitionIn; // Partition file (if buffer size too large)
 
     public SortMergeJoin(Join jn) {
         super(jn.getLeft(), jn.getRight(), jn.getConditionList(), jn.getOpType());
@@ -75,6 +73,8 @@ public class SortMergeJoin extends Join {
      **/
     public Batch next() {
         if (eosl || eosr) {
+            left.close();
+            right.close();
             return null;
         }
 
@@ -135,8 +135,6 @@ public class SortMergeJoin extends Join {
      * Close the operator
      */
     public boolean close() {
-        // File f = new File(rfname);
-        // f.delete();
         return true;
     }
 
@@ -193,8 +191,7 @@ public class SortMergeJoin extends Join {
     }
 
     private void addToPartition() {
-        // ignores max num of buffers for now
-        // TODO: write partition to file if num buffers exceeded?
+        // Assumes that partition fits in memory
         Batch currentBatch;
 
         // handles first buffer
@@ -229,6 +226,7 @@ public class SortMergeJoin extends Join {
     }
 
     private void backtrackPartition() {
+        // set rightTuple to the start of the partition
         isNewPartition = false;
         partitionBatchNo = 0;
         partitionTupleNo = 0;
@@ -237,6 +235,7 @@ public class SortMergeJoin extends Join {
     }
 
     private void clearPartition() {
+        // clear the current right partition
         isNewPartition = true;
         partition = new ArrayList<>();
         partitionBatchNo = 0;

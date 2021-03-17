@@ -1,6 +1,25 @@
-# database-query-processor
+# On Query Processing
 
-## Implementation of ORDERBY
+## 1: Implementation of Block Nested Loops Join
+
+## 2: Implementation of Sort Merge Join
+The implementation of Sort Merge Join is mainly found [here](src/qp/operators/SortMergeJoin.java).
+
+Sort Merge Join is implemented by first using a [Sort operator](src/qp/operators/Sort.java) based on the join attributes on both the left and right relations, then merging them.
+
+The merge algorithm used is as follows:
+
+1. Advance scan of R until current R-tuple's sort key >= current S-tuple's sort key
+2. Advance scan of S until current S-tuple's sort key >= current R-tuple's sort key 
+3. While R-tuple's sort key == S-tuple's sort key, output(R,S), add the S-tuple to an S-partition and advance the scan of S.
+4. Advance scan of R until R-tuple's sort key > S-partition's sort key, while outputting all pairs of (R,S) for each S in the S-partition.
+5. Clear the S-partition, repeat
+
+Assumptions:
+
+1. The S-partition is able to fit in memory
+
+## 3: Implementation of ORDERBY
 
 The ORDERBY clause is implemented via a new [Sort](src/qp/operators/Sort.java) Operator, which implements the external sort algorithm. The Sort operator is the final evaluation step and thus is the root Operator of the query plan. (Refer to [RandomInitialPlan.prepareInitialPlan](src/qp/optimizer/RandomInitialPlan.java) - `createSortOp` is called last, after `createProjectOp`).
 
@@ -14,7 +33,7 @@ The partially sorted runs are stored on disk as files given a unique name per so
 
 Lastly, its IO cost is estimated in [PlanCost.java](src/qp/optimizer/PlanCost.java) as per the formula given in lecture = 2 * ceil(log<sub>buffers-1</sub>(ceil(input pages/buffers)))
 
-## Implementation of DISTINCT
+## 4: Implementation of DISTINCT
 
 DISTINCT is implemented as a part of the [Project](src/qp/operators/Project.java) Operator, with a new `distinct` flag that decides what the Operator does. 
 
@@ -26,8 +45,9 @@ Similar to Sort, Project with distinct=true is also not streaming, thus consumin
 
 The cost and output size of distinct can be found in [PlanCost.java](src/qp/optimizer/PlanCost.java). Under the assumption of independently distributed attributes, the estimated number of distinct values in the input is given by the product of the number of distinct values of all projected attributes. E.g. if field A has values 1 and 2, and field B has values 'a', 'b', 'c', then `SELECT DISTINCT A, B` will be expected to have 2*3=6 distinct values (1,'a'), (1,'b'), (1,'c'), (2,'a'), (2,'b'), (2,'c'). The size of output is thus the number of distinct values, capped by the size of the input. Cost is largely similar to the Sort Operator, except the number of pages of the input and subsequent passes is different since tuple size may decrease.
 
+## 5: Implementation of GROUPBY
 
-## Bugfixes
+## 6: Bugfixes
 
 In the original implementation, if the page size was too small for a single tuple in any result table or intermediate table, the program would enter an infinite loop as Batch has 0 capacity. We fixed this by simply checking the given batch size in the Batch constructor [here](src/qp/utils/Batch.java), and exiting the program if batch size is 0. We deem this an appropriate course of action as there is no way for the program to work around the page size being too small for a single tuple, except if the user were to run the program with a larger input page size.
 
