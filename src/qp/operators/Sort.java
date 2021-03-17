@@ -45,6 +45,11 @@ public class Sort extends Operator {
         this.base = base;
     }
 
+    // Prepare pipeline for producing sorted output. Take note that since sorting is 
+    // not a very streamable operation, given that it has a preparation phase (generating and merging
+    // sorted runs), open already consumes output of base Operator (hence effectively consuming the
+    // entire pipeline) and stops before the final pass of merging (which would produce the final output)
+    // which takes place in next()
     @Override
     public boolean open() {
         this.setSchema(base.getSchema());
@@ -70,9 +75,12 @@ public class Sort extends Operator {
             int indexMin = 0;
             Tuple minTuple = null;
             int indexCurr = 0;
+            // iterate through buffers and find the smallest value in order given by getOrder()
             while (indexCurr < this.inBuffers.size()) {
                 Tuple tup = this.inBuffers.get(indexCurr).peek();
                 if (tup == null) {
+                    // remove empty input buffers and delete them from secondary storage
+                    // once we have read them fully
                     this.inBuffers.remove(indexCurr).close();
                     this.sortedRuns.remove(indexCurr).delete();
                     // do not increment indexCurr
@@ -95,10 +103,11 @@ public class Sort extends Operator {
 
     @Override
     public boolean close() {
-        System.out.println("Closed with " + sortedRuns.size() + " sorted runs still open");
+        this.inBuffers.clear(); // make sure subsequent calls to next return null
         return true;
     }
 
+    // Read in numBuff buffers from base, then sort and write them out into different files
     private void generateSortedRuns() {
         Batch inbatch;
         ArrayList<Batch> buffers = new ArrayList<>(this.numBuff);
@@ -109,12 +118,14 @@ public class Sort extends Operator {
                 buffers.clear();
             }
         }
+        // sort and write out any remaining buffers 
         if (buffers.size() > 0) {
             sortAndWrite(buffers);
         }
         this.base.close();
     }
 
+    // Perform in-memory sort of our ArrayList of buffers, then write it out into a new file (stored in sortedRuns)
     private void sortAndWrite(ArrayList<Batch> buffers) {
         File sortedRun = new File(this.getUniqueFileName());
         sortedRuns.add(sortedRun);
@@ -126,10 +137,13 @@ public class Sort extends Operator {
         buffers.stream()
             .flatMap(buff -> buff.stream())
             .sorted(getOrder())
-            .forEachOrdered(tup -> out.next(tup)); // I hope this does not count as using extra buffers and "cheating"
+            .forEachOrdered(tup -> out.next(tup)); // stream output into file single batch at a time
         out.close();
     }
 
+    // Sorting order of tuples given by this comparator. Compares each attribute in the orderbylist
+    // in declared order, only checking the next attribute if the 2 tuples are equal on this attribute
+    // Reverses order if descending (compareMultiplier is -1 for descending)
     private Comparator<Tuple> getOrder() {
         return (t1, t2) -> {
             for (Attribute attr : orderbyList) {
@@ -146,7 +160,8 @@ public class Sort extends Operator {
     private void mergeRuns() {
         // iterate until final pass
         while (sortedRuns.size() > this.numBuff - 1) {
-            // single pass
+            // single pass. Read in each sorted run into 1 input buffer, then merge them when inBuffers is full
+            // and write them out again.
             ArrayList<File> nextSortedRuns = new ArrayList<>();
             for (File sortedRun : this.sortedRuns) {
                 TupleReader in = new TupleReader(sortedRun.getName(), this.batchSize);
@@ -166,6 +181,7 @@ public class Sort extends Operator {
                 nextSortedRuns.add(nextSortedRun);
             }
         
+            // Previous set of runs no longer needed
             for (File sortedRun : this.sortedRuns) {
                 sortedRun.delete();
             }
@@ -183,6 +199,8 @@ public class Sort extends Operator {
         }
     }
 
+    // Merges current input buffers, outputing them into a single sorted run on disk.
+    // Returns a File object representing this sorted run stored on disk
     private File merge() {
         File nextSortedRun = new File(this.getUniqueFileName());
         TupleWriter outBuffer = new TupleWriter(nextSortedRun.getName(), this.batchSize);
@@ -194,6 +212,7 @@ public class Sort extends Operator {
             int indexMin = 0;
             Tuple minTuple = null;
             int indexCurr = 0;
+            // iterate through buffers and find the smallest value in order given by getOrder()
             while (indexCurr < this.inBuffers.size()) {
                 Tuple tup = this.inBuffers.get(indexCurr).peek();
                 if (tup == null) {

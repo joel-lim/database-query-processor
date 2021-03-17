@@ -26,7 +26,7 @@ public class Project extends Operator {
     // Regular projection
     Batch inbatch; // for simple projection (no distinct)
     int incur; // pointer to next pointer in inbatch
-    boolean eos;
+    boolean eos; // only used in non-distinct projection to indicate base operator has finished.
 
     public Project(Operator base, ArrayList<Attribute> attributes, boolean distinct, int optype, int numBuff) {
         super(optype);
@@ -55,6 +55,7 @@ public class Project extends Operator {
         return this.distinct;
     }
 
+    // If distinct, open consumes base operator input. Non-distinct project streams input like regular (upon call to next)
     @Override
     public boolean open() {
         int tuplesize = schema.getTupleSize(); // this is the projected schema (subschema)
@@ -77,6 +78,7 @@ public class Project extends Operator {
         }
     }
 
+    // Handles distinct next (involving merging sortedRuns) in separate method nextDistinct
     @Override
     public Batch next() {
         if (this.distinct) {
@@ -87,9 +89,11 @@ public class Project extends Operator {
             }
             Batch outbatch = new Batch(this.batchSize);
             while (!outbatch.isFull()) {
+                // no current input batch, try to read next
                 if (this.inbatch == null) {
                     this.inbatch = base.next();
                     if (this.inbatch == null) {
+                        // no more input, close stream and set eos to return null on future nexts
                         this.eos = true;
                         base.close();
                         return outbatch.isEmpty() ? null : outbatch;
@@ -122,7 +126,7 @@ public class Project extends Operator {
             int indexCurr = 0;
             while (indexCurr < this.inBuffers.size()) {
                 Tuple tup = this.inBuffers.get(indexCurr).peek();
-                // consume duplicates
+                // consume duplicates of prev, if prev exists and this buffer is not empty.
                 while (prev != null && tup != null && prev.equals(tup)) {
                     this.inBuffers.get(indexCurr).next();
                     tup = this.inBuffers.get(indexCurr).peek();
@@ -151,6 +155,7 @@ public class Project extends Operator {
 
     @Override
     public boolean close() {
+        this.inBuffers.clear();
         return true;
     }
 
@@ -183,7 +188,7 @@ public class Project extends Operator {
             .map(this::project)
             .sorted()
             .distinct()
-            .forEachOrdered(tup -> out.next(tup)); // I hope this does not count as using extra buffers and "cheating"
+            .forEachOrdered(tup -> out.next(tup)); 
         out.close();
     }
 
