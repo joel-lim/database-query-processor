@@ -75,6 +75,8 @@ public class SortMergeJoin extends Join {
      **/
     public Batch next() {
         if (eosl || eosr) {
+            left.close();
+            right.close();
             return null;
         }
 
