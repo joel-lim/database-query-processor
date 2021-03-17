@@ -1,6 +1,16 @@
 # On Query Processing
 
 ## 1: Implementation of Block Nested Loops Join
+The implementation of Block Nested Loops Join is mainly found [here](src/qp/operators/BlockNestedJoin.java).
+
+Block Nested Loops Join algorithm is as follows:
+
+1. Read the outer relation of block size (B - 2) where B is the number of buffers.
+2. Read one batch of the inner relation into a buffer.
+3. For all the tuples in the block of the outer relation, compare it with all the tuples of the inner relation in the buffer.
+4. Continue reading the inner relation batch by batch until it reaches the end (in other words, scan all tuples of left block with all the tuples in the inner relation). Pairs of tuples that satisfy the condition are added into the output buffer.
+5. Consider the next block of outer relation and repeat.
+
 
 ## 2: Implementation of Sort Merge Join
 The implementation of Sort Merge Join is mainly found [here](src/qp/operators/SortMergeJoin.java).
