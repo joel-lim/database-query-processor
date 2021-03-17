@@ -174,11 +174,10 @@ public class PlanCost {
                 int blockSize = node.getNumBuff() - 2;
                 long numBlocks = (long) Math.ceil((double) leftpages / (double) blockSize);
                 joincost = leftpages + (numBlocks * (rightpages));
+                break;
             case JoinType.SORTMERGE:
                 // sort cost should already be factored in, so just consider merge cost
                 joincost = leftpages + rightpages;
-                // TODO: temporary low joincost to test sortmerge
-                joincost = 0;
                 break;
             default:
                 System.out.println("join type is not supported");
