@@ -1,1 +1,7 @@
+.vscode
 classes
+*.md
+!README.md
+*.stat
+*.tbl
+*.txt
