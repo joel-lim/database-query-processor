@@ -95,7 +95,6 @@ public class Sort extends Operator {
 
     @Override
     public boolean close() {
-        System.out.println("Closed with " + sortedRuns.size() + " sorted runs still open");
         return true;
     }
 
