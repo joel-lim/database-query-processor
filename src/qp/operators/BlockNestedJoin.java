@@ -31,7 +31,6 @@ public class BlockNestedJoin extends Join {
         schema = jn.getSchema();
         jointype = jn.getJoinType();
         numBuff = jn.getNumBuff();
-        System.out.println("BNL being created");
     }
 
     /**
