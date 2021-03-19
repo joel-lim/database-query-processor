@@ -111,12 +111,25 @@ public class Debug {
             System.out.print(")");
 
         } else if (optype == OpType.PROJECT) {
-            System.out.print("Project(");
+            if (((Project) node).isDistinct()) {
+                System.out.print("Distinct(");
+            } else {
+                System.out.print("Project(");
+            }
             PPrint(((Project) node).getBase());
+            System.out.print("  [");
+            System.out.print(((Project) node).getProjAttr());
+            System.out.print("]  ");
             System.out.print(")");
-
         } else if (optype == OpType.SCAN) {
             System.out.print(((Scan) node).getTabName());
+        } else if (optype == OpType.SORT) {
+            System.out.print("Sort(");
+            PPrint(((Sort) node).getBase());
+            System.out.print("  [");
+            System.out.print(((Sort) node).getOrderByList());
+            System.out.print("]  ");
+            System.out.print(")");
         }
     }
 

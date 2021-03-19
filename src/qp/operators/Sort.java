@@ -45,6 +45,10 @@ public class Sort extends Operator {
         this.base = base;
     }
 
+    public ArrayList<Attribute> getOrderByList() {
+        return orderbyList;
+    }
+
     // Prepare pipeline for producing sorted output. Take note that since sorting is 
     // not a very streamable operation, given that it has a preparation phase (generating and merging
     // sorted runs), open already consumes output of base Operator (hence effectively consuming the
