@@ -161,7 +161,9 @@ public class Project extends Operator {
 
     @Override
     public boolean close() {
-        this.inBuffers.clear();
+        if (this.inBuffers != null) {
+            this.inBuffers.clear();
+        }
         return true;
     }
 
