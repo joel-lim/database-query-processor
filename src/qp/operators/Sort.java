@@ -6,6 +6,7 @@ import java.util.Comparator;
 
 import qp.utils.Attribute;
 import qp.utils.Batch;
+import qp.utils.Schema;
 import qp.utils.Tuple;
 import qp.utils.TupleReader;
 import qp.utils.TupleWriter;
@@ -22,6 +23,7 @@ public class Sort extends Operator {
     int batchSize;
     int fileId; // unique id for files generated
     int sortId;
+    boolean isDesc;
 
     public Sort(Operator base, ArrayList<Attribute> orderbyList, boolean isDesc, int optype, int numBuff) {
         super(optype);
@@ -29,6 +31,7 @@ public class Sort extends Operator {
 
         this.base = base;
         this.orderbyList = orderbyList;
+        this.isDesc = isDesc;
         this.compareMultiplier = isDesc ? -1 : 1;
         this.numBuff = numBuff;
         this.sortedRuns = new ArrayList<>();
@@ -242,5 +245,17 @@ public class Sort extends Operator {
 
     private String getUniqueFileName() {
         return "SORT" + (this.sortId) + "-" + (this.fileId++);
+    }
+
+    public Object clone() {
+        Operator newbase = (Operator) base.clone();
+        ArrayList<Attribute> newOrderByList = new ArrayList<>();
+        for (int i = 0; i < orderbyList.size(); ++i) {
+            newOrderByList.add((Attribute) orderbyList.get(i).clone());
+        }
+        Sort newSort = new Sort(newbase, newOrderByList, isDesc, optype, numBuff);
+        Schema newSchema = newbase.getSchema();
+        newSort.setSchema(newSchema);
+        return newSort;
     }
 }
